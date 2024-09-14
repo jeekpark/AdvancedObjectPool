@@ -20,7 +20,7 @@ public:
         mStack.c.reserve(mCapacity);
         for (size_t i = 0; i < mCapacity; ++i)
         {
-            mStack.push(T(std::forward<Args>(args)...));
+            mStack.push(std::make_unique<T>(std::forward<Args>(args)...));
         }
     }
 
@@ -38,7 +38,7 @@ public:
             {
                 if (obj != nullptr)
                 {
-                    mStack.push(std::move(*obj));
+                    mStack.push(std::unique_ptr<T>(obj));
                     ++mLeftObjectCount;
                 }
             };
@@ -48,10 +48,22 @@ public:
             return std::unique_ptr<T, decltype(deleter)>(nullptr, deleter);
         }
 
-        auto obj = std::make_unique<T>(std::move(mStack.top()));
+        std::unique_ptr<T> obj = std::move(mStack.top());
         mStack.pop();
         --mLeftObjectCount;
         return std::unique_ptr<T, decltype(deleter)>(obj.release(), deleter);
+    }
+
+    template <typename... Args>
+    void Expand(size_t extraCapacity, Args&&... args)
+    {
+        mStack.c.reserve(mCapacity + extraCapacity);
+        for (size_t i = 0; i < extraCapacity; ++i)
+        {
+            mStack.push(std::make_unique<T>(std::forward<Args>(args)...));
+        }
+        mCapacity += extraCapacity;
+        mLeftObjectCount += extraCapacity;
     }
 
     size_t GetLeftObjectCount() const noexcept { return mLeftObjectCount; }
@@ -59,10 +71,10 @@ public:
 private:
 
     template<typename T>
-    class AccessibleStack : public std::stack<T, std::vector<T>>
+    class AccessibleStack : public std::stack<std::unique_ptr<T>, std::vector<std::unique_ptr<T>>>
     {
     public:
-        using std::stack<T, std::vector<T>>::c;
+        using std::stack<std::unique_ptr<T>, std::vector<std::unique_ptr<T>>>::c;
     };
 
     size_t mCapacity;
